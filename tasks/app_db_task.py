@@ -98,3 +98,58 @@ def fetch_and_store_posts(ts_nodash: str,
     except Exception as e:
         log.exception("fetch_and_store_posts failed")
         raise AirflowFailException(str(e))
+
+
+def extract_and_save_posts(ts_nodash: str,
+                          dsn: str = "postgresql://postgres:0000@127.0.0.1:5432/sajib") -> str:
+    """Extract all posts from database and save to text file"""
+    try:
+        TMP.mkdir(parents=True, exist_ok=True)
+        output_file = TMP / f"posts_export_{ts_nodash}.txt"
+        
+        # Extract all data from posts table
+        with psycopg2.connect(dsn) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT user_id, post_id, title, body, created_at 
+                    FROM public.posts 
+                    ORDER BY post_id
+                """)
+                
+                rows = cur.fetchall()
+                
+                if not rows:
+                    output_file.write_text("No posts found in database.")
+                    log.warning("No posts found in database")
+                    return str(output_file)
+                
+                # Format data for text file
+                lines = ["Posts Export Report", "=" * 50, ""]
+                lines.append(f"Total posts: {len(rows)}")
+                lines.append(f"Export timestamp: {datetime.strptime(ts_nodash, '%Y%m%dT%H%M%S')}")
+                lines.append("=" * 50)
+                lines.append("")
+                
+                for user_id, post_id, title, body, created_at in rows:
+                    lines.append(f"POST ID: {post_id}")
+                    lines.append(f"User ID: {user_id}")
+                    lines.append(f"Title: {title}")
+                    lines.append(f"Body: {body}")
+                    lines.append(f"Created: {created_at}")
+                    lines.append("-" * 50)
+                    lines.append("")
+                
+                # Write to file
+                output_file.write_text("\n".join(lines), encoding='utf-8')
+        
+        log.info("Exported %d posts to %s", len(rows), output_file)
+        return str(output_file)
+        
+    except psycopg2.Error as e:
+        error_msg = f"Database error: {str(e)}"
+        log.error(error_msg)
+        raise AirflowFailException(error_msg)
+    except Exception as e:
+        error_msg = f"Export failed: {str(e)}"
+        log.exception("extract_and_save_posts failed")
+        raise AirflowFailException(error_msg)
