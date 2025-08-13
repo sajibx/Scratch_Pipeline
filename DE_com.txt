@@ -1,0 +1,136 @@
+
+
+
+set -euo pipefail
+
+brew services start postgresql@15
+
+source "$HOME/AF29/bin/activate"
+
+export AIRFLOW_HOME="$HOME/DE_Projects/airflow29_home"
+export AIRFLOW__CORE__DAGS_FOLDER="/Users/ashiqurrahman/DE_Projects/airflow29_home/dags"
+export AIRFLOW__CORE__LOAD_EXAMPLES=False
+export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN="postgresql+psycopg2://postgres:0000@127.0.0.1:5432/airflow"
+export AIRFLOW__CORE__EXECUTOR=LocalExecutor
+export AIRFLOW__CORE__PARALLELISM=4
+export AIRFLOW__SCHEDULER__MAX_ACTIVE_RUNS_PER_DAG=2
+export AIRFLOW__WEBSERVER__WORKERS=1
+export GUNICORN_CMD_ARGS="--workers 1 --threads 1 --worker-class sync"
+
+
+
+PGPASSWORD=0000 psql -U postgres -h 127.0.0.1 -p 5432 -tc "SELECT 1 FROM pg_database WHERE datname='airflow'" | grep -q 1 || \
+PGPASSWORD=0000 createdb -U postgres -h 127.0.0.1 -p 5432 airflow
+
+mkdir -p "$AIRFLOW_HOME"/{dags,logs,pids,plugins}
+
+airflow db check || airflow db init
+
+nohup airflow scheduler  >"$AIRFLOW_HOME/logs/scheduler.out" 2>"$AIRFLOW_HOME/logs/scheduler.err" &
+echo $! > "$AIRFLOW_HOME/pids/scheduler.pid"
+
+nohup airflow webserver --port 8080 >"$AIRFLOW_HOME/logs/webserver.out" 2>"$AIRFLOW_HOME/logs/webserver.err" &
+echo $! > "$AIRFLOW_HOME/pids/webserver.pid"
+
+airflow config get-value core executor
+
+
+
+
+==========================================================================
+
+
+
+
+set -euo pipefail
+
+source "$HOME/AF29/bin/activate" 2>/dev/null || true
+AIRFLOW_HOME="${AIRFLOW_HOME:-$HOME/DE_Projects/airflow29_home}"
+
+pids=()
+for f in "$AIRFLOW_HOME"/pids/*.pid; do [ -f "$f" ] && pids+=("$(cat "$f")"); done
+if [ "${#pids[@]}" -gt 0 ]; then
+  kill "${pids[@]}" 2>/dev/null || true
+  sleep 1
+  kill -9 "${pids[@]}" 2>/dev/null || true
+fi
+
+pkill -TERM -f "airflow webserver" || true
+pkill -TERM -f "airflow scheduler" || true
+pkill -TERM -f "airflow dag-processor" || true
+pkill -TERM -f "DagFileProcessor" || true
+pkill -TERM -f "dag_processor_manager" || true
+pkill -TERM -f "serve_logs" || true
+pkill -TERM -f "gunicorn" || true
+pkill -TERM -f "airflow" || true
+sleep 1
+pkill -9 -f "airflow webserver" || true
+pkill -9 -f "airflow scheduler" || true
+pkill -9 -f "airflow dag-processor" || true
+pkill -9 -f "DagFileProcessor" || true
+pkill -9 -f "dag_processor_manager" || true
+pkill -9 -f "serve_logs" || true
+pkill -9 -f "gunicorn" || true
+pkill -9 -f "airflow" || true
+
+for port in 8080 8793; do
+  for pid in $(lsof -ti tcp:$port 2>/dev/null || true); do
+    kill -9 "$pid" 2>/dev/null || true
+  done
+done
+
+rm -f "$AIRFLOW_HOME"/pids/*.pid 2>/dev/null || true
+
+brew services stop postgresql@15 || true
+
+pgrep -fal "airflow|gunicorn" || echo "no airflow processes running"
+
+
+
+
+=====================================================================
+
+
+set -euo pipefail
+
+brew services start postgresql@15
+
+source "$HOME/AF29/bin/activate"
+
+export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+export AIRFLOW_HOME="$HOME/DE_Projects/airflow29_home"
+export AIRFLOW__CORE__DAGS_FOLDER="/Users/ashiqurrahman/DE_Projects/airflow29_home/dags"
+export AIRFLOW__CORE__LOAD_EXAMPLES=False
+export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN="postgresql+psycopg2://postgres:0000@127.0.0.1:5432/airflow"
+export AIRFLOW__CORE__EXECUTOR=LocalExecutor
+export AIRFLOW__CORE__PARALLELISM=8
+export AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG=8
+export AIRFLOW__SCHEDULER__MAX_ACTIVE_RUNS_PER_DAG=2
+export AIRFLOW__WEBSERVER__WORKERS=1
+export GUNICORN_CMD_ARGS="--workers 1 --threads 1 --worker-class sync"
+export PYTHONPATH="$HOME/DE_Projects:${PYTHONPATH:-}"
+
+for i in {1..10}; do
+    if PGPASSWORD=0000 psql -U postgres -h 127.0.0.1 -p 5432 -c "SELECT 1" >/dev/null 2>&1; then
+        break
+    fi
+    echo "Waiting for PostgreSQL to start..."
+    sleep 2
+done
+
+PGPASSWORD=0000 psql -U postgres -h 127.0.0.1 -p 5432 -tc "SELECT 1 FROM pg_database WHERE datname='airflow'" | grep -q 1 || \
+PGPASSWORD=0000 createdb -U postgres -h 127.0.0.1 -p 5432 airflow
+
+mkdir -p "$AIRFLOW_HOME"/{dags,logs,pids,plugins}
+
+airflow db check || airflow db init
+
+nohup airflow scheduler >"$AIRFLOW_HOME/logs/scheduler.out" 2>"$AIRFLOW_HOME/logs/scheduler.err" &
+echo $! > "$AIRFLOW_HOME/pids/scheduler.pid"
+
+nohup airflow webserver --port 8080 >"$AIRFLOW_HOME/logs/webserver.out" 2>"$AIRFLOW_HOME/logs/webserver.err" &
+echo $! > "$AIRFLOW_HOME/pids/webserver.pid"
+
+airflow config get-value core executor
+
+
